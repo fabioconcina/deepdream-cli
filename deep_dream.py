@@ -14,17 +14,28 @@ from keras.preprocessing.image import img_to_array, load_img, save_img
 
 class DeepDream(object):
 
+    # default parameters
+    STEP: float = 0.01  # Gradient ascent step size
+    NUM_OCTAVE: int = 3  # Number of scales at which to run gradient ascent
+    OCTAVE_SCALE: float = 1.4  # Size ratio between scales
+    ITERATIONS: int = 20  # Number of ascent steps per scale
+    MAX_LOSS: float = 10.0  # Max allowed loss
+    MIXED2_WEIGHT: float = 0.2  # Mixed layer 2 loss weight
+    MIXED3_WEIGHT: float = 0.5  # Mixed layer 3 loss weight
+    MIXED4_WEIGHT: float = 2.0  # Mixed layer 4 loss weight
+    MIXED5_WEIGHT: float = 1.5   # Mixed layer 5 loss weight
+
     def __init__(self, base_image_path: str,
                  result_prefix: str,
-                 step: float = 0.01,  # Gradient ascent step size
-                 num_octave: int = 3,  # Number of scales at which to run gradient ascent
-                 octave_scale: float = 1.4,  # Size ratio between scales
-                 iterations: int = 20,  # Number of ascent steps per scale
-                 max_loss: float = 10.0,  # Max allowed loss
-                 mixed2_weight: float = 0.2,  # Mixed layer 2 loss weight
-                 mixed3_weight: float = 0.5,  # Mixed layer 3 loss weight
-                 mixed4_weight: float = 2.0,  # Mixed layer 4 loss weight
-                 mixed5_weight: float = 1.5):  # Mixed layer 5 loss weight
+                 step: float = STEP,
+                 num_octave: int = NUM_OCTAVE,
+                 octave_scale: float = OCTAVE_SCALE,
+                 iterations: int = ITERATIONS,
+                 max_loss: float = MAX_LOSS,
+                 mixed2_weight: float = MIXED2_WEIGHT,
+                 mixed3_weight: float = MIXED3_WEIGHT,
+                 mixed4_weight: float = MIXED4_WEIGHT,
+                 mixed5_weight: float = MIXED5_WEIGHT):
         self.base_image_path = base_image_path
         self.result_prefix = result_prefix
         self.step = step
@@ -36,6 +47,29 @@ class DeepDream(object):
         self.mixed3_weight = mixed3_weight
         self.mixed4_weight = mixed4_weight
         self.mixed5_weight = mixed5_weight
+
+    @staticmethod
+    def from_dict(d: Dict) -> "DeepDream":
+        base_image_path = d.get("base_image_path")
+        if base_image_path is None:
+            raise ValueError("base_image_path param is required.")
+        result_prefix = d.get("result_prefix")
+        if result_prefix is None:
+            raise ValueError("result_prefix param is required.")
+        step = d.get("step", DeepDream.STEP)
+        num_octave = d.get("num_octave", DeepDream.NUM_OCTAVE)
+        octave_scale = d.get("octave_scale", DeepDream.OCTAVE_SCALE)
+        iterations = d.get("iterations", DeepDream.ITERATIONS)
+        max_loss = d.get("max_loss", DeepDream.MAX_LOSS)
+        mixed2_weight = d.get("mixed2_weight", DeepDream.MIXED2_WEIGHT)
+        mixed3_weight = d.get("mixed3_weight", DeepDream.MIXED3_WEIGHT)
+        mixed4_weight = d.get("mixed4_weight", DeepDream.MIXED4_WEIGHT)
+        mixed5_weight = d.get("mixed5_weight", DeepDream.MIXED5_WEIGHT)
+        return DeepDream(base_image_path, result_prefix,
+                         step=step, num_octave=num_octave, octave_scale=octave_scale,
+                         iterations=iterations, max_loss=max_loss,
+                         mixed2_weight=mixed2_weight, mixed3_weight=mixed3_weight,
+                         mixed4_weight=mixed4_weight, mixed5_weight=mixed5_weight)
 
     def do_dream(self) -> None:  # noqa: C901
 
@@ -208,16 +242,25 @@ if __name__ == "__main__":
     parser.add_argument("base_image_path", metavar="base_image_path", type=str, help="Path to the image to transform.")
     parser.add_argument("result_prefix", metavar="result_prefix", type=str, help="Prefix for the saved results.")
 
-    parser.add_argument("--step", type=float, default=0.01, help="Gradient ascent step size.")
-    parser.add_argument("--num_octave", type=int, default=3, help="Number of scales at which to run gradient ascent.")
-    parser.add_argument("--octave_scale", type=float, default=1.4, help="Size ratio between scales.")
-    parser.add_argument("--iterations", type=int, default=20, help="Number of ascent steps per scale.")
-    parser.add_argument("--max_loss", type=float, default=10, help="Max allowed loss.")
+    parser.add_argument("--step", type=float, default=DeepDream.STEP,
+                        help="Gradient ascent step size.")
+    parser.add_argument("--num_octave", type=int, default=DeepDream.NUM_OCTAVE,
+                        help="Number of scales at which to run gradient ascent.")
+    parser.add_argument("--octave_scale", type=float, default=DeepDream.OCTAVE_SCALE,
+                        help="Size ratio between scales.")
+    parser.add_argument("--iterations", type=int, default=DeepDream.ITERATIONS,
+                        help="Number of ascent steps per scale.")
+    parser.add_argument("--max_loss", type=float, default=DeepDream.MAX_LOSS,
+                        help="Max allowed loss.")
 
-    parser.add_argument("--mixed2_weight", type=float, default=0.2, help="Mixed layer 2 loss weight.")
-    parser.add_argument("--mixed3_weight", type=float, default=0.5, help="Mixed layer 3 loss weight.")
-    parser.add_argument("--mixed4_weight", type=float, default=2.0, help="Mixed layer 4 loss weight.")
-    parser.add_argument("--mixed5_weight", type=float, default=1.5, help="Mixed layer 5 loss weight.")
+    parser.add_argument("--mixed2_weight", type=float, default=DeepDream.MIXED2_WEIGHT,
+                        help="Mixed layer 2 loss weight.")
+    parser.add_argument("--mixed3_weight", type=float, default=DeepDream.MIXED3_WEIGHT,
+                        help="Mixed layer 3 loss weight.")
+    parser.add_argument("--mixed4_weight", type=float, default=DeepDream.MIXED4_WEIGHT,
+                        help="Mixed layer 4 loss weight.")
+    parser.add_argument("--mixed5_weight", type=float, default=DeepDream.MIXED5_WEIGHT,
+                        help="Mixed layer 5 loss weight.")
 
     args: argparse.Namespace = parser.parse_args()
     _base_image_path: str = args.base_image_path
