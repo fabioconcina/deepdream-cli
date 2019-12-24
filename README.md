@@ -75,3 +75,24 @@ from command line:
 ```bash
 python deep_dream.py img/test.jpg img/dream --num_octave 5
 ```
+
+### Experiment
+
+You can define a sequence of experiments with different parameters
+in `experiment.json`, then run `experiment.py` to run the sequence:
+
+```
+usage: experiment.py [-h] base_image_path
+
+Deep Dreams with Keras. Multiple experiments.
+
+positional arguments:
+  base_image_path  Path to the image to transform.
+
+optional arguments:
+  -h, --help       show this help message and exit
+```
+
+An example JSON is committed to the repository, copy
+and rename it and adjust the values.  
+The generated images will be named as the experiment.

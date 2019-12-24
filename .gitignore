@@ -2,3 +2,4 @@
 .mypy_cache
 venv
 *.png
+experiment.json
