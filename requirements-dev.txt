@@ -1,0 +1,17 @@
+mypy
+pytest
+flake8
+flake8-bugbear
+flake8-tidy-imports
+flake8-quotes
+flake8-eradicate
+pep8-naming
+flake8-print
+flake8-bandit
+flake8-commas
+flake8-comprehensions
+flake8-builtins
+flake8-alfred
+flake8-executable
+flake8-mutable
+flake8-import-order

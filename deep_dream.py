@@ -1,19 +1,19 @@
 """Based on https://github.com/keras-team/keras/blob/master/examples/deep_dream.py"""
 
 import argparse
-from typing import Callable, Dict, List, Tuple
+from typing import Callable, Dict, List, Optional, Tuple
 
 import keras
 import numpy as np
 import scipy
 import tensorflow as tf
-from keras import backend as K
+from keras import backend as K  # noqa: N812
 from keras.applications import inception_v3
-from keras.preprocessing.image import load_img, save_img, img_to_array
+from keras.preprocessing.image import img_to_array, load_img, save_img
 
 
-def deep_dream(base_image_path,
-               result_prefix,
+def deep_dream(base_image_path: str,  # noqa: C901
+               result_prefix: str,
                step: float = 0.01,  # Gradient ascent step size
                num_octave: int = 3,  # Number of scales at which to run gradient ascent
                octave_scale: float = 1.4,  # Size ratio between scales
@@ -22,7 +22,8 @@ def deep_dream(base_image_path,
                mixed2_weight: float = 0.2,  # Mixed layer 2 loss weight
                mixed3_weight: float = 0.5,  # Mixed layer 3 loss weight
                mixed4_weight: float = 2.0,  # Mixed layer 4 loss weight
-               mixed5_weight: float = 1.5):  # Mixed layer 5 loss weight
+               mixed5_weight: float = 1.5,  # Mixed layer 5 loss weight
+               ) -> None:
 
     print(f"Initiating deep dream with the following parameters:\n"
           f"step={step}\n"
@@ -49,7 +50,7 @@ def deep_dream(base_image_path,
         },
     }
 
-    def preprocess_image(image_path: str):
+    def preprocess_image(image_path: str) -> np.ndarray:
         # Util function to open, resize and format pictures
         # into appropriate tensors.
         _img: np.ndarray = load_img(image_path)
@@ -58,7 +59,7 @@ def deep_dream(base_image_path,
         _img = inception_v3.preprocess_input(_img)
         return _img
 
-    def deprocess_image(_x: np.ndarray):
+    def deprocess_image(_x: np.ndarray) -> np.ndarray:
         # Util function to convert a tensor into a valid image.
         if K.image_data_format() == "channels_first":
             _x = _x.reshape((3, _x.shape[2], _x.shape[3]))
@@ -81,7 +82,7 @@ def deep_dream(base_image_path,
     print("Model loaded.")
 
     # Get the symbolic outputs of each "key" layer (we gave them unique names).
-    layer_dict: Dict[str, keras.layers.Layer] = dict([(layer.name, layer) for layer in model.layers])
+    layer_dict: Dict[str, keras.layers.Layer] = {layer.name: layer for layer in model.layers}
 
     # Define the loss.
     loss: tf.Tensor = K.variable(0.)
@@ -114,20 +115,21 @@ def deep_dream(base_image_path,
         grad_values: np.ndarray = outs[1]
         return loss_value, grad_values
 
-    def resize_img(_img: np.ndarray, size):
+    def resize_img(_img: np.ndarray, size: Tuple) -> np.ndarray:
         _img = np.copy(_img)
         if K.image_data_format() == "channels_first":
-            factors = (1, 1,
-                       float(size[0]) / _img.shape[2],
-                       float(size[1]) / _img.shape[3])
+            factors: Tuple = (1, 1,
+                              float(size[0]) / _img.shape[2],
+                              float(size[1]) / _img.shape[3])
         else:
-            factors: Tuple = (1,
-                              float(size[0]) / _img.shape[1],
-                              float(size[1]) / _img.shape[2],
-                              1)
+            factors = (1,
+                       float(size[0]) / _img.shape[1],
+                       float(size[1]) / _img.shape[2],
+                       1)
         return scipy.ndimage.zoom(_img, factors, order=1)
 
-    def gradient_ascent(_x: np.ndarray, _iterations: int, _step: float, _max_loss: float = None) -> np.ndarray:
+    def gradient_ascent(_x: np.ndarray, _iterations: int, _step: float,
+                        _max_loss: Optional[float] = None) -> np.ndarray:
         for _i in range(_iterations):
             loss_value, grad_values = eval_loss_and_grads(_x)
             if _max_loss is not None and loss_value > _max_loss:
@@ -137,7 +139,7 @@ def deep_dream(base_image_path,
         return _x
 
     """Process:
-    
+
     - Load the original image.
     - Define a number of processing scales (i.e. image shapes),
         from smallest to largest.
@@ -147,7 +149,7 @@ def deep_dream(base_image_path,
         - Upscale image to the next scale
         - Reinject the detail that was lost at upscaling time
     - Stop when we are back to the original size.
-    
+
     To obtain the detail lost during upscaling, we simply
     take the original image, shrink it down, upscale it,
     and compare the result to the (resized) original image.
@@ -160,7 +162,7 @@ def deep_dream(base_image_path,
         original_shape = img.shape[1:3]
     successive_shapes: List[Tuple] = [original_shape]
     for i in range(1, num_octave):
-        shape: Tuple = tuple([int(dim / (octave_scale ** i)) for dim in original_shape])
+        shape: Tuple = tuple(int(dim / (octave_scale ** i)) for dim in original_shape)
         successive_shapes.append(shape)
     successive_shapes = successive_shapes[::-1]
     original_img: np.ndarray = np.copy(img)
