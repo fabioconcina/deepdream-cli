@@ -18,26 +18,34 @@ def deep_dream(base_image_path,
                num_octave: int = 3,  # Number of scales at which to run gradient ascent
                octave_scale: float = 1.4,  # Size ratio between scales
                iterations: int = 20,  # Number of ascent steps per scale
-               max_loss: float = 10.):  # Max allowed loss
+               max_loss: float = 10.0,  # Max allowed loss
+               mixed2_weight: float = 0.2,  # Mixed layer 2 loss weight
+               mixed3_weight: float = 0.5,  # Mixed layer 3 loss weight
+               mixed4_weight: float = 2.0,  # Mixed layer 4 loss weight
+               mixed5_weight: float = 1.5):  # Mixed layer 5 loss weight
 
     print(f"Initiating deep dream with the following parameters:\n"
           f"step={step}\n"
           f"num_octave={num_octave}\n"
           f"octave_scale={octave_scale}\n"
           f"iterations={iterations}\n"
-          f"max_loss={max_loss}\n")
+          f"max_loss={max_loss}\n"
+          f"mixed2_weight={mixed2_weight}\n"
+          f"mixed3_weight={mixed3_weight}\n"
+          f"mixed4_weight={mixed4_weight}\n"
+          f"mixed5_weight={mixed5_weight}\n")
 
     # These are the names of the layers
     # for which we try to maximize activation,
     # as well as their weight in the final loss
     # we try to maximize.
     # You can tweak these setting to obtain new visual effects.
-    settings: Dict[str, Dict[str, float]] = {
+    layer_loss_weight: Dict[str, Dict[str, float]] = {
         "features": {
-            "mixed2": 0.2,
-            "mixed3": 0.5,
-            "mixed4": 2.,
-            "mixed5": 1.5,
+            "mixed2": mixed2_weight,
+            "mixed3": mixed3_weight,
+            "mixed4": mixed4_weight,
+            "mixed5": mixed5_weight,
         },
     }
 
@@ -77,11 +85,11 @@ def deep_dream(base_image_path,
 
     # Define the loss.
     loss: tf.Tensor = K.variable(0.)
-    for layer_name in settings["features"]:
+    for layer_name in layer_loss_weight["features"]:
         # Add the L2 norm of the features of a layer to the loss.
         if layer_name not in layer_dict:
             raise ValueError("Layer " + layer_name + " not found in model.")
-        coeff: float = settings["features"][layer_name]
+        coeff: float = layer_loss_weight["features"][layer_name]
         x: tf.Tensor = layer_dict[layer_name].output
         # We avoid border artifacts by only involving non-border pixels in the loss.
         scaling: tf.Tensor = K.prod(K.cast(K.shape(x), "float32"))
@@ -178,8 +186,8 @@ def deep_dream(base_image_path,
 if __name__ == "__main__":
 
     parser: argparse.ArgumentParser = argparse.ArgumentParser(description="Deep Dreams with Keras.")
-    parser.add_argument("base_image_path", metavar="base", type=str, help="Path to the image to transform.")
-    parser.add_argument("result_prefix", metavar="res_prefix", type=str, help="Prefix for the saved results.")
+    parser.add_argument("base_image_path", metavar="base_image_path", type=str, help="Path to the image to transform.")
+    parser.add_argument("result_prefix", metavar="result_prefix", type=str, help="Prefix for the saved results.")
 
     parser.add_argument("--step", type=float, default=0.01, help="Gradient ascent step size.")
     parser.add_argument("--num_octave", type=int, default=3, help="Number of scales at which to run gradient ascent.")
@@ -187,14 +195,25 @@ if __name__ == "__main__":
     parser.add_argument("--iterations", type=int, default=20, help="Number of ascent steps per scale.")
     parser.add_argument("--max_loss", type=float, default=10, help="Max allowed loss.")
 
+    parser.add_argument("--mixed2_weight", type=float, default=0.2, help="Mixed layer 2 loss weight.")
+    parser.add_argument("--mixed3_weight", type=float, default=0.5, help="Mixed layer 3 loss weight.")
+    parser.add_argument("--mixed4_weight", type=float, default=2.0, help="Mixed layer 4 loss weight.")
+    parser.add_argument("--mixed5_weight", type=float, default=1.5, help="Mixed layer 5 loss weight.")
+
     args: argparse.Namespace = parser.parse_args()
     _base_image_path: str = args.base_image_path
     _result_prefix: str = args.result_prefix
+
     _step: float = args.step
     _num_octave: int = args.num_octave
     _octave_scale: float = args.octave_scale
     _iterations: int = args.iterations
     _max_loss: float = args.max_loss
+
+    _mixed2_weight: float = args.mixed2_weight
+    _mixed3_weight: float = args.mixed3_weight
+    _mixed4_weight: float = args.mixed4_weight
+    _mixed5_weight: float = args.mixed5_weight
 
     deep_dream(_base_image_path,
                _result_prefix,
@@ -202,4 +221,8 @@ if __name__ == "__main__":
                num_octave=_num_octave,
                octave_scale=_octave_scale,
                iterations=_iterations,
-               max_loss=_max_loss)
+               max_loss=_max_loss,
+               mixed2_weight=_mixed2_weight,
+               mixed3_weight=_mixed3_weight,
+               mixed4_weight=_mixed4_weight,
+               mixed5_weight=_mixed5_weight)
