@@ -18,7 +18,7 @@ pip install -r requirements.txt
 
 ### Usage
 
-```bash
+```
 usage: deep_dream.py [-h] [--step STEP] [--num_octave NUM_OCTAVE]
                      [--octave_scale OCTAVE_SCALE] [--iterations ITERATIONS]
                      [--max_loss MAX_LOSS] [--mixed2_weight MIXED2_WEIGHT]
@@ -69,7 +69,7 @@ python deep_dream.py img/test.jpg img/dream
 - `mixed4_weight`: Mixed layer 4 loss weight (default 2.0).
 - `mixed5_weight`: Mixed layer 5 loss weight (default 1.5).
 
-To change an hyperparameter, simply pass it as option parameter
+To change an hyperparameter, simply pass it as optional parameter
 from command line:
 
 ```bash
