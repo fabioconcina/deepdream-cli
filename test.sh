@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 echo Running mypy...
 python -m mypy .
 echo ...END
