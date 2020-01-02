@@ -12,7 +12,7 @@ from keras import backend as K  # noqa: N812
 from keras.applications import inception_v3
 from keras.preprocessing.image import img_to_array, load_img, save_img
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("deep_dream")
 logger.setLevel(logging.INFO)
 handler = logging.StreamHandler()
 formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")

@@ -25,8 +25,14 @@ if not os.path.exists(result_folder):
 
 for experiment in experiment_list:
     for experiment_name, experiment_dict in experiment.items():
-        logger.info(f"*** Initiating experiment {experiment_name}")
+
+        logger.info(f"*** Initiating experiment {experiment_name} ***")
+
+        experiment_result_path: str = os.path.join(result_folder, experiment_name)
         experiment_dict["base_image_path"] = base_image_path
-        experiment_dict["result_prefix"] = os.path.join(result_folder, experiment_name)
+        experiment_dict["result_prefix"] = experiment_result_path
+        with open(f"{experiment_result_path}.json", "w") as json_file:
+            json.dump(experiment_dict, json_file)
+
         dream: DeepDream = DeepDream.from_dict(experiment_dict)
         dream.do_dream()
