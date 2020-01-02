@@ -1,9 +1,12 @@
 import argparse
 import json
+import logging
 import os
 from typing import Dict, List
 
 from deep_dream import DeepDream
+
+logger = logging.getLogger("deep_dream")
 
 
 parser: argparse.ArgumentParser = argparse.ArgumentParser(description="Deep Dreams with Keras. Multiple experiments.")
@@ -22,7 +25,7 @@ if not os.path.exists(result_folder):
 
 for experiment in experiment_list:
     for experiment_name, experiment_dict in experiment.items():
-        print(f"\n*** Initiating experiment {experiment_name}")
+        logger.info(f"*** Initiating experiment {experiment_name}")
         experiment_dict["base_image_path"] = base_image_path
         experiment_dict["result_prefix"] = os.path.join(result_folder, experiment_name)
         dream: DeepDream = DeepDream.from_dict(experiment_dict)

@@ -1,6 +1,7 @@
 """Based on https://github.com/keras-team/keras/blob/master/examples/deep_dream.py"""
 
 import argparse
+import logging
 from typing import Callable, Dict, List, Optional, Tuple
 
 import keras
@@ -10,6 +11,13 @@ import tensorflow as tf
 from keras import backend as K  # noqa: N812
 from keras.applications import inception_v3
 from keras.preprocessing.image import img_to_array, load_img, save_img
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+handler = logging.StreamHandler()
+formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+handler.setFormatter(formatter)
+logger.addHandler(handler)
 
 
 class DeepDream(object):
@@ -73,19 +81,19 @@ class DeepDream(object):
 
     def do_dream(self) -> None:  # noqa: C901
 
-        print(f"\nInput image: {self.base_image_path}\n"
-              f"Output image: {self.result_prefix}.png\n")
+        logger.info(f"Input image: {self.base_image_path}"
+                    f" Output image: {self.result_prefix}.png")
 
-        print(f"Initiating deep dream with the following parameters:\n"
-              f"step={self.step}\n"
-              f"num_octave={self.num_octave}\n"
-              f"octave_scale={self.octave_scale}\n"
-              f"iterations={self.iterations}\n"
-              f"max_loss={self.max_loss}\n"
-              f"mixed2_weight={self.mixed2_weight}\n"
-              f"mixed3_weight={self.mixed3_weight}\n"
-              f"mixed4_weight={self.mixed4_weight}\n"
-              f"mixed5_weight={self.mixed5_weight}\n")
+        logger.info(f"Initiating deep dream with the following parameters:\n"
+                    f"step={self.step}\n"
+                    f"num_octave={self.num_octave}\n"
+                    f"octave_scale={self.octave_scale}\n"
+                    f"iterations={self.iterations}\n"
+                    f"max_loss={self.max_loss}\n"
+                    f"mixed2_weight={self.mixed2_weight}\n"
+                    f"mixed3_weight={self.mixed3_weight}\n"
+                    f"mixed4_weight={self.mixed4_weight}\n"
+                    f"mixed5_weight={self.mixed5_weight}\n")
 
         # These are the names of the layers
         # for which we try to maximize activation,
@@ -130,7 +138,7 @@ class DeepDream(object):
         model: keras.Model = inception_v3.InceptionV3(weights="imagenet",
                                                       include_top=False)
         dream: tf.Tensor = model.input
-        print("Model loaded.")
+        logger.info("Model loaded.")
 
         # Get the symbolic outputs of each "key" layer (we gave them unique names).
         layer_dict: Dict[str, keras.layers.Layer] = {layer.name: layer for layer in model.layers}
@@ -140,7 +148,7 @@ class DeepDream(object):
         for layer_name in layer_loss_weight["features"]:
             # Add the L2 norm of the features of a layer to the loss.
             if layer_name not in layer_dict:
-                raise ValueError("Layer " + layer_name + " not found in model.")
+                raise ValueError(f"Layer {layer_name} not found in model.")
             coeff: float = layer_loss_weight["features"][layer_name]
             x: tf.Tensor = layer_dict[layer_name].output
             # We avoid border artifacts by only involving non-border pixels in the loss.
@@ -179,14 +187,18 @@ class DeepDream(object):
                            1)
             return scipy.ndimage.zoom(_img, factors, order=1)
 
-        def gradient_ascent(_x: np.ndarray, _iterations: int, _step: float,
-                            _max_loss: Optional[float] = None) -> np.ndarray:
-            for _i in range(_iterations):
+        def gradient_ascent(_x: np.ndarray, step: float, max_iterations: int,
+                            max_loss: Optional[float] = None) -> np.ndarray:
+            mod: float = round(max_iterations / 10, -1)  # set loss logging frequency according to max_iterations
+            if mod == 0:
+                mod = 1
+            for _i in range(max_iterations):
                 loss_value, grad_values = eval_loss_and_grads(_x)
-                if _max_loss is not None and loss_value > _max_loss:
+                if max_loss is not None and loss_value > max_loss:
                     break
-                print("..Loss value at", _i, ":", loss_value)
-                _x += _step * grad_values
+                if _i % mod == 0:
+                    logger.info(f"..Loss value at {_i}: {loss_value}")
+                _x += step * grad_values
             return _x
 
         """Process:
@@ -220,12 +232,12 @@ class DeepDream(object):
         shrunk_original_img: np.ndarray = resize_img(img, successive_shapes[0])
 
         for shape in successive_shapes:
-            print("Processing image shape", shape)
+            logger.info(f"Processing image shape: {shape}")
             img = resize_img(img, shape)
             img = gradient_ascent(img,
-                                  _iterations=self.iterations,
-                                  _step=self.step,
-                                  _max_loss=self.max_loss)
+                                  step=self.step,
+                                  max_iterations=self.iterations,
+                                  max_loss=self.max_loss)
             upscaled_shrunk_original_img: np.ndarray = resize_img(shrunk_original_img, shape)
             same_size_original: np.ndarray = resize_img(original_img, shape)
             lost_detail: np.ndarray = same_size_original - upscaled_shrunk_original_img
