@@ -88,6 +88,7 @@ Deep Dreams with Keras. Multiple experiments.
 
 positional arguments:
   base_image_path  Path to the image to transform.
+  result_folder        Results folder path.
 
 optional arguments:
   -h, --help           show this help message and exit

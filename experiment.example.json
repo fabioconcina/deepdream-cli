@@ -3,6 +3,5 @@
      {"experiment1":  {"mixed2_weight":  0.6}},
      {"experiment2":  {"mixed2_weight":  0.6, "num_octave": 4}},
      {"experiment3":  {"mixed2_weight":  0.6, "mixed3_weight":  0.8, "num_octave": 4}}
-  ],
-  "result_folder": "img"
+  ]
 }

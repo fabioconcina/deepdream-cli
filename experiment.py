@@ -5,27 +5,28 @@ import os
 from typing import Dict, List
 
 import numpy as np
-from deep_dream import DeepDream
+from deepdream import DeepDream
 
-logger = logging.getLogger("deep_dream")
+logger = logging.getLogger(__name__)
 
 
 parser: argparse.ArgumentParser = argparse.ArgumentParser(description="Deep Dreams with Keras. Multiple experiments.")
 parser.add_argument("base_image_path", metavar="base_image_path", type=str, help="Path to the image to transform.")
+parser.add_argument("result_folder", metavar="result_folder", type=str, default="img", help="Results folder path.")
 parser.add_argument("--random_n", type=int, default=0, help="Number of random iterations for layer weights.")
 
 args: argparse.Namespace = parser.parse_args()
 base_image_path: str = args.base_image_path
+result_folder: str = args.result_folder
 random_n: int = int(args.random_n)
+
+if not os.path.exists(result_folder):
+    os.mkdir(result_folder)
 
 if random_n == 0:
     with open("experiment.json") as json_file:
         config: Dict = json.load(json_file)
         experiment_list: List = config["experiment"]
-        result_folder: str = config["result_folder"]
-
-    if not os.path.exists(result_folder):
-        os.mkdir(result_folder)
 
     for experiment in experiment_list:
         for experiment_name, experiment_dict in experiment.items():
@@ -46,7 +47,7 @@ else:
         logger.info(f"*** Initiating random experiment {i} ***")
 
         random_weights: np.ndarray = np.random.dirichlet(np.ones(4))  # generate random weight with sum to 1
-        dream = DeepDream(base_image_path=base_image_path, result_prefix=f"img/rexperiment{i}",
+        dream = DeepDream(base_image_path=base_image_path, result_prefix=f"{result_folder}/rexperiment{i}",
                           mixed2_weight=random_weights[0],
                           mixed3_weight=random_weights[1],
                           mixed4_weight=random_weights[2],

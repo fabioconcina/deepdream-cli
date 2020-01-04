@@ -12,7 +12,7 @@ from keras import backend as K  # noqa: N812
 from keras.applications import inception_v3
 from keras.preprocessing.image import img_to_array, load_img, save_img
 
-logger = logging.getLogger("deep_dream")
+logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 handler = logging.StreamHandler()
 formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
@@ -58,12 +58,17 @@ class DeepDream(object):
 
     @staticmethod
     def from_dict(d: Dict) -> "DeepDream":
+        """Creates an instance of DeepDream from dictionary.
+        Optional parameters not found in the dictionary are defaulted to class defaults."""
+
         base_image_path = d.get("base_image_path")
         if base_image_path is None:
             raise ValueError("base_image_path param is required.")
         result_prefix = d.get("result_prefix")
         if result_prefix is None:
             raise ValueError("result_prefix param is required.")
+
+        # optional params
         step = d.get("step", DeepDream.STEP)
         num_octave = d.get("num_octave", DeepDream.NUM_OCTAVE)
         octave_scale = d.get("octave_scale", DeepDream.OCTAVE_SCALE)
@@ -73,6 +78,7 @@ class DeepDream(object):
         mixed3_weight = d.get("mixed3_weight", DeepDream.MIXED3_WEIGHT)
         mixed4_weight = d.get("mixed4_weight", DeepDream.MIXED4_WEIGHT)
         mixed5_weight = d.get("mixed5_weight", DeepDream.MIXED5_WEIGHT)
+
         return DeepDream(base_image_path, result_prefix,
                          step=step, num_octave=num_octave, octave_scale=octave_scale,
                          iterations=iterations, max_loss=max_loss,
@@ -80,6 +86,26 @@ class DeepDream(object):
                          mixed4_weight=mixed4_weight, mixed5_weight=mixed5_weight)
 
     def do_dream(self) -> None:  # noqa: C901
+        """
+        DeepDream algorithm as implemented in
+        https://github.com/keras-team/keras/blob/master/examples/deep_dream.py.
+
+        Process:
+
+        - Load the original image.
+        - Define a number of processing scales (i.e. image shapes),
+            from smallest to largest.
+        - Resize the original image to the smallest scale.
+        - For every scale, starting with the smallest (i.e. current one):
+            - Run gradient ascent
+            - Upscale image to the next scale
+            - Reinject the detail that was lost at upscaling time
+        - Stop when we are back to the original size.
+
+        To obtain the detail lost during upscaling, we simply
+        take the original image, shrink it down, upscale it,
+        and compare the result to the (resized) original image.
+        """
 
         logger.info(f"Input image: {self.base_image_path}"
                     f" Output image: {self.result_prefix}.png")
@@ -95,11 +121,60 @@ class DeepDream(object):
                     f"mixed4_weight={self.mixed4_weight}\n"
                     f"mixed5_weight={self.mixed5_weight}\n")
 
-        # These are the names of the layers
-        # for which we try to maximize activation,
-        # as well as their weight in the final loss
-        # we try to maximize.
-        # You can tweak these setting to obtain new visual effects.
+        def preprocess_image(image_path: str) -> np.ndarray:
+            # Util function to open, resize and format pictures
+            # into appropriate tensors.
+            image: np.ndarray = load_img(image_path)
+            image = img_to_array(image)
+            image = np.expand_dims(image, axis=0)
+            return inception_v3.preprocess_input(image)
+
+        def deprocess_image(tensor: np.ndarray) -> np.ndarray:
+            # Util function to convert a tensor into a valid image.
+            if K.image_data_format() == "channels_first":
+                tensor = tensor.reshape((3, tensor.shape[2], tensor.shape[3]))
+                tensor = tensor.transpose((1, 2, 0))
+            else:
+                tensor = tensor.reshape((tensor.shape[1], tensor.shape[2], 3))
+            tensor /= 2.
+            tensor += 0.5
+            tensor *= 255.
+            tensor = np.clip(tensor, 0, 255).astype("uint8")
+            return tensor
+
+        def eval_loss_and_grads(tensor: np.ndarray) -> Tuple[float, np.ndarray]:
+            outs: List = fetch_loss_and_grads([tensor])
+            loss_value: float = outs[0]
+            grad_values: np.ndarray = outs[1]
+            return loss_value, grad_values
+
+        def resize_img(image: np.ndarray, size: Tuple) -> np.ndarray:
+            image = np.copy(image)
+            if K.image_data_format() == "channels_first":
+                factors: Tuple = (1, 1,
+                                  float(size[0]) / image.shape[2],
+                                  float(size[1]) / image.shape[3])
+            else:
+                factors = (1,
+                           float(size[0]) / image.shape[1],
+                           float(size[1]) / image.shape[2],
+                           1)
+            return scipy.ndimage.zoom(image, factors, order=1)
+
+        def gradient_ascent(tensor: np.ndarray, step: float, max_iterations: int,
+                            max_loss: Optional[float] = None) -> np.ndarray:
+            mod: float = round(max_iterations / 10, -1)  # set loss logging frequency according to max_iterations
+            if mod == 0:
+                mod = 1
+            for i_ in range(max_iterations):
+                loss_value, grad_values = eval_loss_and_grads(tensor)
+                if max_loss is not None and loss_value > max_loss:
+                    break
+                if i_ % mod == 0:
+                    logger.info(f"..Loss value at {i_}: {loss_value}")
+                tensor += step * grad_values
+            return tensor
+
         layer_loss_weight: Dict[str, Dict[str, float]] = {
             "features": {
                 "mixed2": self.mixed2_weight,
@@ -109,38 +184,13 @@ class DeepDream(object):
             },
         }
 
-        def preprocess_image(image_path: str) -> np.ndarray:
-            # Util function to open, resize and format pictures
-            # into appropriate tensors.
-            _img: np.ndarray = load_img(image_path)
-            _img = img_to_array(_img)
-            _img = np.expand_dims(_img, axis=0)
-            _img = inception_v3.preprocess_input(_img)
-            return _img
-
-        def deprocess_image(_x: np.ndarray) -> np.ndarray:
-            # Util function to convert a tensor into a valid image.
-            if K.image_data_format() == "channels_first":
-                _x = _x.reshape((3, _x.shape[2], _x.shape[3]))
-                _x = _x.transpose((1, 2, 0))
-            else:
-                _x = _x.reshape((_x.shape[1], _x.shape[2], 3))
-            _x /= 2.
-            _x += 0.5
-            _x *= 255.
-            _x = np.clip(_x, 0, 255).astype("uint8")
-            return _x
-
         K.set_learning_phase(0)
 
-        # Build the InceptionV3 network with our placeholder.
-        # The model will be loaded with pre-trained ImageNet weights.
         model: keras.Model = inception_v3.InceptionV3(weights="imagenet",
                                                       include_top=False)
         dream: tf.Tensor = model.input
         logger.info("Model loaded.")
 
-        # Get the symbolic outputs of each "key" layer (we gave them unique names).
         layer_dict: Dict[str, keras.layers.Layer] = {layer.name: layer for layer in model.layers}
 
         # Define the loss.
@@ -167,56 +217,6 @@ class DeepDream(object):
         # of the loss and gradients given an input image.
         outputs: List = [loss, grads]
         fetch_loss_and_grads: Callable = K.function([dream], outputs)
-
-        def eval_loss_and_grads(_x: np.ndarray) -> Tuple[float, np.ndarray]:
-            outs: List = fetch_loss_and_grads([_x])
-            loss_value: float = outs[0]
-            grad_values: np.ndarray = outs[1]
-            return loss_value, grad_values
-
-        def resize_img(_img: np.ndarray, size: Tuple) -> np.ndarray:
-            _img = np.copy(_img)
-            if K.image_data_format() == "channels_first":
-                factors: Tuple = (1, 1,
-                                  float(size[0]) / _img.shape[2],
-                                  float(size[1]) / _img.shape[3])
-            else:
-                factors = (1,
-                           float(size[0]) / _img.shape[1],
-                           float(size[1]) / _img.shape[2],
-                           1)
-            return scipy.ndimage.zoom(_img, factors, order=1)
-
-        def gradient_ascent(_x: np.ndarray, step: float, max_iterations: int,
-                            max_loss: Optional[float] = None) -> np.ndarray:
-            mod: float = round(max_iterations / 10, -1)  # set loss logging frequency according to max_iterations
-            if mod == 0:
-                mod = 1
-            for _i in range(max_iterations):
-                loss_value, grad_values = eval_loss_and_grads(_x)
-                if max_loss is not None and loss_value > max_loss:
-                    break
-                if _i % mod == 0:
-                    logger.info(f"..Loss value at {_i}: {loss_value}")
-                _x += step * grad_values
-            return _x
-
-        """Process:
-
-        - Load the original image.
-        - Define a number of processing scales (i.e. image shapes),
-            from smallest to largest.
-        - Resize the original image to the smallest scale.
-        - For every scale, starting with the smallest (i.e. current one):
-            - Run gradient ascent
-            - Upscale image to the next scale
-            - Reinject the detail that was lost at upscaling time
-        - Stop when we are back to the original size.
-
-        To obtain the detail lost during upscaling, we simply
-        take the original image, shrink it down, upscale it,
-        and compare the result to the (resized) original image.
-        """
 
         img = preprocess_image(self.base_image_path)
         if K.image_data_format() == "channels_first":
@@ -275,29 +275,29 @@ if __name__ == "__main__":
                         help="Mixed layer 5 loss weight.")
 
     args: argparse.Namespace = parser.parse_args()
-    _base_image_path: str = args.base_image_path
-    _result_prefix: str = args.result_prefix
+    base_image_path_: str = args.base_image_path
+    result_prefix_: str = args.result_prefix
 
-    _step: float = args.step
-    _num_octave: int = args.num_octave
-    _octave_scale: float = args.octave_scale
-    _iterations: int = args.iterations
-    _max_loss: float = args.max_loss
+    step_: float = args.step
+    num_octave_: int = args.num_octave
+    octave_scale_: float = args.octave_scale
+    iterations_: int = args.iterations
+    max_loss_: float = args.max_loss
 
-    _mixed2_weight: float = args.mixed2_weight
-    _mixed3_weight: float = args.mixed3_weight
-    _mixed4_weight: float = args.mixed4_weight
-    _mixed5_weight: float = args.mixed5_weight
+    mixed2_weight_: float = args.mixed2_weight
+    mixed3_weight_: float = args.mixed3_weight
+    mixed4_weight_: float = args.mixed4_weight
+    mixed5_weight_: float = args.mixed5_weight
 
-    deepdream: DeepDream = DeepDream(_base_image_path,
-                                     _result_prefix,
-                                     step=_step,
-                                     num_octave=_num_octave,
-                                     octave_scale=_octave_scale,
-                                     iterations=_iterations,
-                                     max_loss=_max_loss,
-                                     mixed2_weight=_mixed2_weight,
-                                     mixed3_weight=_mixed3_weight,
-                                     mixed4_weight=_mixed4_weight,
-                                     mixed5_weight=_mixed5_weight)
+    deepdream: DeepDream = DeepDream(base_image_path_,
+                                     result_prefix_,
+                                     step=step_,
+                                     num_octave=num_octave_,
+                                     octave_scale=octave_scale_,
+                                     iterations=iterations_,
+                                     max_loss=max_loss_,
+                                     mixed2_weight=mixed2_weight_,
+                                     mixed3_weight=mixed3_weight_,
+                                     mixed4_weight=mixed4_weight_,
+                                     mixed5_weight=mixed5_weight_)
     deepdream.do_dream()
