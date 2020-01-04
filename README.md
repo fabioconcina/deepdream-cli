@@ -90,9 +90,14 @@ positional arguments:
   base_image_path  Path to the image to transform.
 
 optional arguments:
-  -h, --help       show this help message and exit
+  -h, --help           show this help message and exit
+  --random_n RANDOM_N  Number of random iterations for layer weights.
 ```
 
 An example JSON is committed to the repository, copy
 and rename it and adjust the values.  
 The generated images will be named as the experiment.
+
+Optionally, you can run N experiments with random weights
+for the layers contribution specifying the optional parameter 
+`--random_n`. 
